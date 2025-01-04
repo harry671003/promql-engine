@@ -4,6 +4,10 @@
 package aggregate
 
 import (
+	"context"
+	"github.com/prometheus/prometheus/promql/parser/posrange"
+	"github.com/prometheus/prometheus/util/annotations"
+	"github.com/thanos-io/promql-engine/execution/warnings"
 	"math"
 
 	"github.com/prometheus/prometheus/model/histogram"
@@ -19,14 +23,14 @@ const (
 )
 
 type accumulator interface {
-	Add(v float64, h *histogram.FloatHistogram) error
+	Add(ctx context.Context, v float64, h *histogram.FloatHistogram) error
 	Value() (float64, *histogram.FloatHistogram)
 	ValueType() ValueType
 	Reset(float64)
 }
 
 type vectorAccumulator interface {
-	AddVector(vs []float64, hs []*histogram.FloatHistogram) error
+	AddVector(ctx context.Context, vs []float64, hs []*histogram.FloatHistogram) error
 	Value() (float64, *histogram.FloatHistogram)
 	ValueType() ValueType
 	Reset(float64)
@@ -42,7 +46,7 @@ func newSumAcc() *sumAcc {
 	return &sumAcc{}
 }
 
-func (s *sumAcc) AddVector(float64s []float64, histograms []*histogram.FloatHistogram) error {
+func (s *sumAcc) AddVector(ctx context.Context, float64s []float64, histograms []*histogram.FloatHistogram) error {
 	if len(float64s) > 0 {
 		s.value += SumCompensated(float64s)
 		s.hasFloatVal = true
@@ -55,7 +59,7 @@ func (s *sumAcc) AddVector(float64s []float64, histograms []*histogram.FloatHist
 	return err
 }
 
-func (s *sumAcc) Add(v float64, h *histogram.FloatHistogram) error {
+func (s *sumAcc) Add(ctx context.Context, v float64, h *histogram.FloatHistogram) error {
 	if h == nil {
 		s.hasFloatVal = true
 		s.value += v
@@ -111,21 +115,24 @@ type maxAcc struct {
 	hasValue bool
 }
 
-func (c *maxAcc) AddVector(vs []float64, hs []*histogram.FloatHistogram) error {
+func (c *maxAcc) AddVector(ctx context.Context, vs []float64, hs []*histogram.FloatHistogram) error {
+	if len(hs) != 0 {
+		warnings.AddToContext(annotations.NewHistogramIgnoredInAggregationInfo("max", posrange.PositionRange{}), ctx)
+	}
 	if len(vs) == 0 {
 		return nil
 	}
 	fst, rem := vs[0], vs[1:]
-	if err := c.Add(fst, nil); err != nil {
+	if err := c.Add(ctx, fst, nil); err != nil {
 		return err
 	}
 	if len(rem) == 0 {
 		return nil
 	}
-	return c.Add(floats.Max(rem), nil)
+	return c.Add(ctx, floats.Max(rem), nil)
 }
 
-func (c *maxAcc) Add(v float64, h *histogram.FloatHistogram) error {
+func (c *maxAcc) Add(ctx context.Context, v float64, h *histogram.FloatHistogram) error {
 	if !c.hasValue {
 		c.value = v
 		c.hasValue = true
@@ -163,21 +170,24 @@ type minAcc struct {
 	hasValue bool
 }
 
-func (c *minAcc) AddVector(vs []float64, hs []*histogram.FloatHistogram) error {
+func (c *minAcc) AddVector(ctx context.Context, vs []float64, hs []*histogram.FloatHistogram) error {
+	if len(hs) != 0 {
+		warnings.AddToContext(annotations.NewHistogramIgnoredInAggregationInfo("min", posrange.PositionRange{}), ctx)
+	}
 	if len(vs) == 0 {
 		return nil
 	}
 	fst, rem := vs[0], vs[1:]
-	if err := c.Add(fst, nil); err != nil {
+	if err := c.Add(ctx, fst, nil); err != nil {
 		return err
 	}
 	if len(rem) == 0 {
 		return nil
 	}
-	return c.Add(floats.Min(rem), nil)
+	return c.Add(ctx, floats.Min(rem), nil)
 }
 
-func (c *minAcc) Add(v float64, h *histogram.FloatHistogram) error {
+func (c *minAcc) Add(ctx context.Context, v float64, h *histogram.FloatHistogram) error {
 	if !c.hasValue {
 		c.value = v
 		c.hasValue = true
@@ -215,7 +225,7 @@ type groupAcc struct {
 	hasValue bool
 }
 
-func (c *groupAcc) AddVector(vs []float64, hs []*histogram.FloatHistogram) error {
+func (c *groupAcc) AddVector(ctx context.Context, vs []float64, hs []*histogram.FloatHistogram) error {
 	if len(vs) == 0 && len(hs) == 0 {
 		return nil
 	}
@@ -224,7 +234,7 @@ func (c *groupAcc) AddVector(vs []float64, hs []*histogram.FloatHistogram) error
 	return nil
 }
 
-func (c *groupAcc) Add(v float64, h *histogram.FloatHistogram) error {
+func (c *groupAcc) Add(ctx context.Context, v float64, h *histogram.FloatHistogram) error {
 	c.hasValue = true
 	c.value = 1
 	return nil
@@ -256,7 +266,7 @@ func newCountAcc() *countAcc {
 	return &countAcc{}
 }
 
-func (c *countAcc) AddVector(vs []float64, hs []*histogram.FloatHistogram) error {
+func (c *countAcc) AddVector(ctx context.Context, vs []float64, hs []*histogram.FloatHistogram) error {
 	if len(vs) > 0 || len(hs) > 0 {
 		c.hasValue = true
 		c.value += float64(len(vs)) + float64(len(hs))
@@ -264,7 +274,7 @@ func (c *countAcc) AddVector(vs []float64, hs []*histogram.FloatHistogram) error
 	return nil
 }
 
-func (c *countAcc) Add(v float64, h *histogram.FloatHistogram) error {
+func (c *countAcc) Add(ctx context.Context, v float64, h *histogram.FloatHistogram) error {
 	c.hasValue = true
 	c.value += 1
 	return nil
@@ -304,7 +314,7 @@ func newAvgAcc() *avgAcc {
 	return &avgAcc{}
 }
 
-func (a *avgAcc) Add(v float64, h *histogram.FloatHistogram) error {
+func (a *avgAcc) Add(ctx context.Context, v float64, h *histogram.FloatHistogram) error {
 	if h != nil {
 		a.histCount++
 		if a.histSum == nil {
@@ -381,14 +391,14 @@ func (a *avgAcc) Add(v float64, h *histogram.FloatHistogram) error {
 	return nil
 }
 
-func (a *avgAcc) AddVector(vs []float64, hs []*histogram.FloatHistogram) error {
+func (a *avgAcc) AddVector(ctx context.Context, vs []float64, hs []*histogram.FloatHistogram) error {
 	for _, v := range vs {
-		if err := a.Add(v, nil); err != nil {
+		if err := a.Add(ctx, v, nil); err != nil {
 			return err
 		}
 	}
 	for _, h := range hs {
-		if err := a.Add(0, h); err != nil {
+		if err := a.Add(ctx, 0, h); err != nil {
 			return err
 		}
 	}
@@ -430,7 +440,7 @@ type statAcc struct {
 	hasValue bool
 }
 
-func (s *statAcc) Add(v float64, h *histogram.FloatHistogram) error {
+func (s *statAcc) Add(ctx context.Context, v float64, h *histogram.FloatHistogram) error {
 	s.hasValue = true
 	s.count++
 
@@ -494,7 +504,10 @@ func newQuantileAcc() accumulator {
 	return &quantileAcc{}
 }
 
-func (q *quantileAcc) Add(v float64, h *histogram.FloatHistogram) error {
+func (q *quantileAcc) Add(ctx context.Context, v float64, h *histogram.FloatHistogram) error {
+	if h != nil {
+		warnings.AddToContext(annotations.NewHistogramIgnoredInAggregationInfo("quantile", posrange.PositionRange{}), ctx)
+	}
 	q.hasValue = true
 	q.points = append(q.points, v)
 	return nil
@@ -530,7 +543,7 @@ func newHistogramAvg() *histogramAvg {
 	}
 }
 
-func (acc *histogramAvg) Add(v float64, h *histogram.FloatHistogram) error {
+func (acc *histogramAvg) Add(ctx context.Context, v float64, h *histogram.FloatHistogram) error {
 	if h == nil {
 		acc.hasFloat = true
 	}

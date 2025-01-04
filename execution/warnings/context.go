@@ -40,6 +40,9 @@ func NewContext(ctx context.Context) context.Context {
 }
 
 func AddToContext(warn error, ctx context.Context) {
+	if warn == nil {
+		return
+	}
 	w, ok := ctx.Value(key).(*warnings)
 	if !ok {
 		return

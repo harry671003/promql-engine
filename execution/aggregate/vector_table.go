@@ -48,9 +48,9 @@ func (t *vectorTable) timestamp() int64 {
 	return t.ts
 }
 
-func (t *vectorTable) aggregate(vector model.StepVector) error {
+func (t *vectorTable) aggregate(ctx context.Context, vector model.StepVector) error {
 	t.ts = vector.T
-	return t.accumulator.AddVector(vector.Samples, vector.Histograms)
+	return t.accumulator.AddVector(ctx, vector.Samples, vector.Histograms)
 }
 
 func (t *vectorTable) toVector(ctx context.Context, pool *model.VectorPool) model.StepVector {

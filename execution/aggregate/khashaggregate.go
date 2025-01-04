@@ -7,6 +7,9 @@ import (
 	"container/heap"
 	"context"
 	"fmt"
+	"github.com/prometheus/prometheus/promql/parser/posrange"
+	"github.com/prometheus/prometheus/util/annotations"
+	"github.com/thanos-io/promql-engine/execution/warnings"
 	"math"
 	"sort"
 	"sync"
@@ -129,6 +132,14 @@ func (a *kAggregate) Next(ctx context.Context) ([]model.StepVector, error) {
 		if int(a.params[i]) <= 0 {
 			result = append(result, a.GetPool().GetStepVector(vector.T))
 			continue
+		}
+		if len(vector.Histograms) != 0 {
+			switch a.aggregation {
+			case parser.TOPK:
+				warnings.AddToContext(annotations.NewHistogramIgnoredInAggregationInfo("topk", posrange.PositionRange{}), ctx)
+			case parser.BOTTOMK:
+				warnings.AddToContext(annotations.NewHistogramIgnoredInAggregationInfo("bottomk", posrange.PositionRange{}), ctx)
+			}
 		}
 		a.aggregate(vector.T, &result, int(a.params[i]), vector.SampleIDs, vector.Samples)
 		a.next.GetPool().PutStepVector(vector)

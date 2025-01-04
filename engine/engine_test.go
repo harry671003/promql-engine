@@ -63,16 +63,17 @@ func TestPromqlAcceptance(t *testing.T) {
 	// since we use them in our tests too we need to enable them afterwards again
 	t.Cleanup(func() { parser.EnableExperimentalFunctions = true })
 
-	engine := engine.New(engine.Opts{
+	ng := engine.New(engine.Opts{
 		EngineOpts: promql.EngineOpts{
 			EnableAtModifier:         true,
 			EnableNegativeOffset:     true,
 			MaxSamples:               5e10,
 			Timeout:                  1 * time.Hour,
 			NoStepSubqueryIntervalFn: func(rangeMillis int64) int64 { return 30 * time.Second.Milliseconds() },
+			EnableDelayedNameRemoval: true,
 		}})
 
-	promqltest.RunBuiltinTests(t, engine)
+	promqltest.RunBuiltinTests(t, ng)
 }
 
 func TestVectorSelectorWithGaps(t *testing.T) {
