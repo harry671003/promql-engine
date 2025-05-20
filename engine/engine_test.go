@@ -2221,11 +2221,22 @@ avg by (storage_info) (
 			end:   time.UnixMilli(170000),
 		},
 		{
-			name: "predict_linear",
+			name: "failed#1",
 			load: `load 1m
 				native_histogram {{sum:100 count:100}} {{sum:103 count:103}} {{sum:106 count:106}} {{sum:109 count:109}} {{sum:112 count:112}} {{sum:3 count:3 counter_reset_hint:reset}} {{sum:6 count:6}}+{{sum:3 count:3}}x5`,
 			query: `increase(native_histogram[10m:3m])`,
 			start: time.UnixMilli(10 * 60 * 1000),
+			end:   time.UnixMilli(10 * 60 * 1000),
+			step:  0,
+		},
+		{
+			name: "failed#2",
+			load: `load 30s
+				some_metric {{schema:0 sum:1 count:1 buckets:[1]}} {{schema:-53 sum:1 count:1 custom_values:[5 10] buckets:[1]}} {{schema:0 sum:5 count:4 buckets:[1 2 1]}} {{schema:-53 sum:1 count:1 custom_values:[5 10] buckets:[1]}}`,
+			query: `rate(some_metric[1m])`,
+			start: time.UnixMilli(-60 * 1000),
+			end:   time.UnixMilli(120 * 1000),
+			step:  time.Minute,
 		},
 	}
 

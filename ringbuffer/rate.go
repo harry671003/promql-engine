@@ -5,10 +5,9 @@ package ringbuffer
 
 import (
 	"context"
+	"github.com/thanos-io/promql-engine/query"
 	"math"
 	"slices"
-
-	"github.com/thanos-io/promql-engine/query"
 
 	"github.com/prometheus/prometheus/model/histogram"
 )
@@ -99,7 +98,7 @@ func (r *RateBuffer) MaxT() int64 { return r.last.T }
 func (r *RateBuffer) Push(t int64, v Value) {
 	// Detect resets and store the current and previous sample so that
 	// the rate is properly adjusted.
-	if r.last.T >= r.currentMint && v.H != nil && r.last.V.H != nil {
+	if r.last.T > r.currentMint && v.H != nil && r.last.V.H != nil {
 		if v.H.DetectReset(r.last.V.H) {
 			r.resets = append(r.resets, Sample{
 				T: r.last.T,
